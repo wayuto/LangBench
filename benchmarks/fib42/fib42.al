@@ -1,4 +1,4 @@
-$import "io.ah"
+import io
 
 fun(pure) fib(n: int): int {
     if n <= 1 {
@@ -9,5 +9,6 @@ fun(pure) fib(n: int): int {
 
 fun main(): int {
     var n = fib(42);
+    io::println(f"{n}")
     return 0
 }

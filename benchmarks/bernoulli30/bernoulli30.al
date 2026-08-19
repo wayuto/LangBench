@@ -1,4 +1,4 @@
-$import "io.ah"
+import io
 
 fun(pure) binomial(n: int, k: int): int {
     if k == 0 || k == n {
@@ -27,5 +27,6 @@ fun(pure) bernoulli(n: int): float {
 
 fun main(): int {
     var n = bernoulli(30)
+    io::println(f"{n}")
     return 0
 }
