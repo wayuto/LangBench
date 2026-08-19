@@ -3,7 +3,7 @@ name: "Alum"
 platform: "linux"
 file_extension: ".al"
 setup_commands:
-  - "sudo apt-get install -y --no-install-recommends rustc cargo"
+  - "sudo apt-get install -y --no-install-recommends rustc cargo lld"
   - "git clone https://github.com/wayuto/Alum.git --depth 1"
   - "cd Alum"
   - "sh ./install.sh"
