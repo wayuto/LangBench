@@ -4,6 +4,6 @@ platform: "linux"
 file_extension: ".cs"
 setup_commands:
   - "sudo apt-get install -y --no-install-recommends dotnet-sdk-8.0"
-compile_command: "dotnet build {sources} -o {output}"
+compile_command: "bash scripts/dotnet_build.sh cs {output} {sources}"
 run_command: "{output}"
 version_command: "dotnet --version"

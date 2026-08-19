@@ -1,11 +1,12 @@
 # scripts/reporter.py
 import json
+import statistics
 import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path
 
 # 配置中文字体
-plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'WenQuanYi Micro Hei', 'Droid Sans Fallback']
+plt.rcParams['font.sans-serif'] = ['Noto Sans CJK SC', 'WenQuanYi Micro Hei', 'SimHei', 'DejaVu Sans', 'Droid Sans Fallback']
 plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
 def format_time(seconds, decimals=4):
@@ -41,62 +42,77 @@ def generate_report(results_dir):
 
     # 如果没有成功结果，跳过图表生成
     if len(df) > 0:
-        generate_comparison_chart(df)
-        generate_trend_chart(df)
+        generate_boxplot_chart(df)
 
     # 生成Markdown表格
     generate_results_table(df, failed_df)
 
     return df
 
-def generate_comparison_chart(df):
-    if len(df) == 0:
+def _language_colors(languages):
+    cmap = plt.cm.tab20
+    return {lang: cmap(i % 20) for i, lang in enumerate(sorted(languages))}
+
+def _sample_times(row):
+    """获取每次运行的原始时间列表；旧数据没有 times 字段时用聚合统计近似"""
+    times = row.get('times')
+    if isinstance(times, list) and len(times) > 0:
+        return [t for t in times if isinstance(t, (int, float))]
+    mean = row.get('average_time', 0)
+    if mean <= 0:
+        return []
+    std = row.get('std_dev_time', 0) or 0
+    q1 = max(0.0, mean - 0.6745 * std)
+    q3 = mean + 0.6745 * std
+    return [row.get('min_time', mean), q1, mean, q3, row.get('max_time', mean)]
+
+def generate_boxplot_chart(df):
+    """每个测试用例一张横向箱线图：展示各语言多次运行时间的分布（对数刻度）"""
+    if len(df) == 0 or 'test_case' not in df or 'language' not in df:
         return
 
-    plt.figure(figsize=(12, 8))
+    test_cases = sorted(df['test_case'].unique())
+    colors = _language_colors(df['language'].unique())
+    n_cases = len(test_cases)
 
-    # 按测试用例分组，比较不同语言的性能
-    test_cases = df['test_case'].unique()
-    x = range(len(test_cases))
-    width = 0.8 / len(df['language'].unique())
+    fig, axes = plt.subplots(1, n_cases, figsize=(7 * n_cases, 10), squeeze=False)
+    axes = axes[0]
 
-    for i, language in enumerate(df['language'].unique()):
-        lang_data = df[df['language'] == language]
-        values = [lang_data[lang_data['test_case'] == tc]['average_time'].values[0]
-                  if len(lang_data[lang_data['test_case'] == tc]) > 0 else 0
-                  for tc in test_cases]
-        plt.bar([pos + i * width for pos in x], values, width, label=language)
+    for ax, test_case in zip(axes, test_cases):
+        test_data = df[df['test_case'] == test_case]
 
-    plt.xticks([pos + width for pos in x], test_cases, rotation=45, ha='right')
-    plt.ylabel('执行时间(秒)')
-    plt.title('各语言性能对比')
-    plt.legend()
+        langs = []
+        boxes = []
+        for _, row in test_data.iterrows():
+            times = _sample_times(row)
+            if len(times) > 0:
+                langs.append(row['language'])
+                boxes.append(times)
+
+        if not boxes:
+            continue
+
+        # 按中位数排序（最快的在顶部）
+        order = sorted(range(len(boxes)), key=lambda i: statistics.median(boxes[i]))
+        langs = [langs[i] for i in order]
+        boxes = [boxes[i] for i in order]
+
+        bp = ax.boxplot(boxes, orientation='horizontal', patch_artist=True, tick_labels=langs, widths=0.6,
+                        medianprops=dict(color='black', linewidth=1.5),
+                        flierprops=dict(marker='o', markersize=3, alpha=0.5))
+
+        for patch, lang in zip(bp['boxes'], langs):
+            patch.set_facecolor(colors[lang])
+            patch.set_alpha(0.8)
+
+        ax.set_xscale('log')
+        ax.set_xlabel('执行时间（秒, 对数刻度）')
+        ax.set_title(f'{test_case} 执行时间分布', fontsize=14)
+        ax.grid(True, axis='x', alpha=0.3)
+
     plt.tight_layout()
     Path('report').mkdir(exist_ok=True)
-    plt.savefig('report/comparison.png')
-    plt.close()
-
-def generate_trend_chart(df):
-    if len(df) == 0:
-        return
-
-    plt.figure(figsize=(12, 8))
-
-    # 按语言分组，展示在不同测试用例上的性能趋势
-    for language in df['language'].unique():
-        lang_data = df[df['language'] == language]
-        sorted_data = lang_data.sort_values('test_case')
-        plt.plot(sorted_data['test_case'], sorted_data['average_time'],
-                marker='o', label=language)
-
-    plt.xticks(rotation=45, ha='right')
-    plt.ylabel('执行时间(秒)')
-    plt.title('性能趋势图')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    Path('report').mkdir(exist_ok=True)
-    plt.savefig('report/trend.png')
+    plt.savefig('report/boxplot.svg', format='svg')
     plt.close()
 
 def generate_results_table(df, failed_df):
@@ -109,10 +125,8 @@ def generate_results_table(df, failed_df):
         # 添加图表
         if len(df) > 0 and 'test_case' in df.columns:
             f.write('## 性能图表\n\n')
-            f.write('### 性能对比\n\n')
-            f.write('![性能对比](report/comparison.png)\n\n')
-            f.write('### 性能趋势\n\n')
-            f.write('![性能趋势](report/trend.png)\n\n')
+            f.write('### 执行时间箱线图\n\n')
+            f.write('![执行时间箱线图](report/boxplot.svg)\n\n')
 
         # 按测试用例分组（仅成功的数据）
         if len(df) > 0 and 'test_case' in df.columns:
@@ -134,29 +148,34 @@ def generate_results_table(df, failed_df):
                 # 排序：按平均时间升序
                 test_data = test_data.sort_values('average_time')
 
-                f.write(f'| 语言 | 平均时间({unit}) | 最小时间({unit}) | 最大时间({unit}) | 标准差({unit}) | 成功率 |\n')
-                f.write('|------|------------------|------------------|------------------|-----------------|--------|\n')
+                f.write(f'| 语言 | 平均时间({unit}) | 中位数({unit}) | 最小时间({unit}) | 最大时间({unit}) | 标准差({unit}) | 成功率 |\n')
+                f.write('|------|------------------|-----------------|------------------|------------------|-----------------|--------|\n')
 
                 for _, row in test_data.iterrows():
                     success_rate = (row['successful_runs'] / row['total_runs']) * 100
+                    times = _sample_times(row)
+                    median = statistics.median(times) if times else row['average_time']
                     # 根据单位转换时间值
                     if unit == 's':
                         avg_str = f"{row['average_time']:.{decimals}f}"
+                        med_str = f"{median:.{decimals}f}"
                         min_str = f"{row['min_time']:.{decimals}f}"
                         max_str = f"{row['max_time']:.{decimals}f}"
                         std_str = f"{row['std_dev_time']:.{decimals}f}"
                     elif unit == 'ms':
                         avg_str = f"{row['average_time'] * 1000:.{decimals}f}"
+                        med_str = f"{median * 1000:.{decimals}f}"
                         min_str = f"{row['min_time'] * 1000:.{decimals}f}"
                         max_str = f"{row['max_time'] * 1000:.{decimals}f}"
                         std_str = f"{row['std_dev_time'] * 1000:.{decimals}f}"
                     else:  # μs
                         avg_str = f"{row['average_time'] * 1000000:.{decimals}f}"
+                        med_str = f"{median * 1000000:.{decimals}f}"
                         min_str = f"{row['min_time'] * 1000000:.{decimals}f}"
                         max_str = f"{row['max_time'] * 1000000:.{decimals}f}"
                         std_str = f"{row['std_dev_time'] * 1000000:.{decimals}f}"
 
-                    f.write(f"| {row['language']} | {avg_str} | {min_str} | {max_str} | {std_str} | {success_rate:.1f}% |\n")
+                    f.write(f"| {row['language']} | {avg_str} | {med_str} | {min_str} | {max_str} | {std_str} | {success_rate:.1f}% |\n")
 
                 f.write('\n')
 

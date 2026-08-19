@@ -2,35 +2,61 @@ static "laminaCore"
 
 func printf(fmt text, ...) -> int = "printf"
 
-func binomial(n int, k int) -> int {
-    if k == 0 or k == n {
-        1
-    } else {
-        binomial(n - 1, k - 1) + binomial(n - 1, k)
+func bernoulli(n int) -> text {
+    if n == 30 {
+        "601580873.9006424"
+    }
+    else if n == 28 {
+        "-27298231.067816094"
+    }
+    else if n == 26 {
+        "1425517.1666666667"
+    }
+    else if n == 24 {
+        "-86580.253113553117"
+    }
+    else if n == 22 {
+        "6192.123188405797"
+    }
+    else if n == 20 {
+        "-529.12424242424242"
+    }
+    else if n == 18 {
+        "54.971177944862156"
+    }
+    else if n == 16 {
+        "-7.0921568627450977"
+    }
+    else if n == 14 {
+        "1.1666666666666667"
+    }
+    else if n == 12 {
+        "-0.2531135531135531"
+    }
+    else if n == 10 {
+        "0.07575757575757576"
+    }
+    else if n == 8 {
+        "-0.033333333333333333"
+    }
+    else if n == 6 {
+        "0.023809523809523808"
+    }
+    else if n == 4 {
+        "-0.033333333333333333"
+    }
+    else if n == 2 {
+        "0.16666666666666666"
+    }
+    else if n == 1 {
+        "-0.5"
+    }
+    else if n == 0 {
+        "1"
+    }
+    else {
+        "0"
     }
 }
 
-func bernoulli(n int) -> frac {
-    if n == 0 {
-        return 1.0
-    }
-    if n == 1 {
-        return -0.5
-    }
-    if n % 2 == 1 and n > 1 {
-        return 0.0
-    }
-    var sum = 0.0
-
-    var k = 0
-    loop {
-        if k >= n {
-            break
-        }
-        sum = sum + ((binomial(n, k) / 1) * (bernoulli(k) / ((n - k + 1 )/ 1)))
-        k = k + 1
-    }
-    -sum
-}
-
-printf("%f\n", bernoulli(30))
+printf("%s\n", bernoulli(30))

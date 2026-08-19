@@ -20,7 +20,8 @@ fn bernoulli(n: u32) f64 {
     
     var sum: f64 = 0.0;
     for (0..n) |k| {
-        sum += @as(f64, @floatFromInt(binomial(n, @intCast(u32, k)))) * bernoulli(@intCast(u32, k)) / @as(f64, @floatFromInt(n - @intCast(u32, k) + 1));
+        const k32: u32 = @intCast(k);
+        sum += @as(f64, @floatFromInt(binomial(n, k32))) * bernoulli(k32) / @as(f64, @floatFromInt(n - k32 + 1));
     }
     return -sum;
 }
